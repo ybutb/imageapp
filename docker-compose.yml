@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - '80:80'
+    volumes:
+      - .:/var/www/html
+      - ./default.conf:/etc/nginx/conf.d/default.conf
+    links:
+      - app
+    networks:
+      - public
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+    working_dir: /var/www/html
+    tty: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # for Linux
+    networks:
+      - public
+
+networks:
+  public:
+    driver: bridge
