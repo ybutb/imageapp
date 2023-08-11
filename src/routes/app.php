@@ -8,10 +8,14 @@ use Symfony\Component\Routing\RouteCollection;
 
 $routes = new RouteCollection();
 
-$routes->add('modify', new Route('/{imageName}/{imageAction}', [
+$routes->add('show', (new Route('/show', [
     'controller' => ImageController::class,
-    'method' => 'GET',
+    'action' => 'show'
+]))->setMethods(['GET']));
+
+$routes->add('modify', (new Route('/{imageName}/{imageAction}', [
+    'controller' => ImageController::class,
     'action' => 'index'
-]));
+]))->setMethods(['GET']));
 
 return $routes;

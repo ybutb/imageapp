@@ -17,11 +17,9 @@ class ImageService
     /**
      * @throws ApiException Error during image cropping or not found.
      */
-    public function crop(Image $image): void
+    public function crop(Image $image): Image
     {
-        if (!file_exists(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName)) {
-            throw new ApiException('Failed to open the image: ' . $image->originalName, 400);
-        }
+        $this->isOriginalImageExists($image);
 
         if ($image->width === null || $image->height === null) {
             throw new ApiException('Width or height for a crop operation is not defined.', 500);
@@ -30,40 +28,60 @@ class ImageService
         $image->modifiedName = $this->generateModifiedName('crop', $image);
 
         if ($this->isModified($image)) {
-            return;
+            return $image;
         }
 
         try {
-            $imagick = new Imagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
-            $originalWidth = $imagick->getImageWidth();
-            $originalHeight = $imagick->getImageHeight();
-        } catch (ImagickException $e) {
-            throw new ApiException('Error during the image width/height check: ' . $image->originalName, 500);
-        }
-
-        if ($image->width > $originalWidth || $image->height > $originalHeight) {
-            $imagick->clear();
-
-            throw new ApiException('Crop size is invalid', 500);
-        }
-
-        try {
+            $imagick = $this->getImagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
             $imagick->cropImage($image->width, $image->height, 0, 0);
-            $imagick->setImageFormat("webp");
-            $this->setWritable();
+            $imagick->setImageFormat($image->getExtension());
             $imagick->writeImage(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
         } catch (ImagickException $e) {
-            $imagick->clear();
-
-            throw new ApiException('Error during the image cropping.', 500);
+            throw new ApiException('Error during the image cropping ' . $image->originalName, 500);
         }
 
         $imagick->clear();
+
+        return $image;
     }
 
-    public function resize(int $width, int $length): void
+    protected function getImagick(string $file): Imagick
     {
-        // crop image
+        return new Imagick($file);
+    }
+
+    public function resize(Image $image): Image
+    {
+        $this->isOriginalImageExists($image);
+
+        if ($image->width === null && $image->height === null) {
+            throw new ApiException('Width or height for a crop operation is not defined.', 500);
+        }
+
+        $image->modifiedName = $this->generateModifiedName('resize', $image);
+
+        if ($this->isModified($image)) {
+            return $image;
+        }
+
+        try {
+            $imagick = $this->getImagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
+            $imagick->resizeImage($image->width, $image->height, Imagick::FILTER_UNDEFINED, 1);
+            $imagick->writeImage(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
+        } catch (ImagickException $e) {
+            throw new ApiException('Error during the image resize: ' . $image->originalName, 500);
+        }
+
+        $imagick->clear();
+
+        return $image;
+    }
+
+    protected function isOriginalImageExists(Image $image)
+    {
+        if (!file_exists(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName)) {
+            throw new ApiException('Failed to find the image: ' . $image->originalName, 404);
+        }
     }
 
     private function generateModifiedName(string $action, Image $image): string
@@ -76,14 +94,11 @@ class ImageService
         return file_exists(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
     }
 
-    public function setWritable(): void
+    public function getSampleImagesPaths(): array
     {
-        if (!file_exists(self::LOCATION_MODIFIED_IMAGES)) {
-            mkdir(self::LOCATION_MODIFIED_IMAGES, 0662);
-        }
-
-        if (!is_writable(self::LOCATION_MODIFIED_IMAGES)) {
-            chmod(self::LOCATION_MODIFIED_IMAGES, 0662);
-        }
+        return [
+            self::LOCATION_UNMODIFIED_IMAGES . 'cropped_dog.webp',
+            self::LOCATION_UNMODIFIED_IMAGES . 'resized_dog.webp',
+        ];
     }
 }

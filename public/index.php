@@ -3,45 +3,17 @@
 require_once __DIR__.'/../vendor/autoload.php';
 
 use App\Exception\ApiException;
+use App\Kernel\Kernel;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
-use Symfony\Component\Routing\Matcher\UrlMatcher;
-use Symfony\Component\Routing\RequestContext;
 
+$routesConfig = include __DIR__.'/../src/routes/app.php';
 $request = Request::createFromGlobals();
-$context = new RequestContext();
-$context->fromRequest($request);
-
-$routes = include __DIR__.'/../src/routes/app.php';
-
-$matcher = new UrlMatcher($routes, $context);
+$kernel = new Kernel($routesConfig, $request);
 
 try {
-    $routeParams = $matcher->match($request->getPathInfo());
-
-    $methodParams = array_filter($routeParams, static fn($routeParaValue, $routeParamName) =>
-        !in_array($routeParamName, ['action', 'controller', 'method', '_route'], true),
-    ARRAY_FILTER_USE_BOTH);
-
-    $controllerClass = $routeParams['controller'];
-    $action = $routeParams['action'];
-
-    $dependencies = getDependencyClasses($controllerClass);
-    $dependencyInstances = [];
-
-    foreach ($dependencies as $dependency) {
-
-        if ($dependency === Request::class) {
-            $dependencyInstances[] = $request;
-            continue;
-        }
-
-        $dependencyInstances[] = new $dependency();
-    }
-
-    $controllerInstance = new $controllerClass(...$dependencyInstances);
-    $response = $controllerInstance->{$action}(...$methodParams);
+    $response = $kernel->run();
 } catch (ResourceNotFoundException $exception) {
     $response = new Response('Not Found', 404);
 } catch (ApiException $exception) {
@@ -51,29 +23,3 @@ try {
 }
 
 $response->send();
-
-function getDependencyClasses(string $class): array
-{
-    $reflectionClass = new ReflectionClass($class);
-
-    $constructor = $reflectionClass->getConstructor();
-
-    if (!$constructor) {
-        return [];
-    }
-
-    $parameters = $constructor->getParameters();
-
-    $dependencies = [];
-    // Loop through the parameters to see their types
-    foreach ($parameters as $parameter) {
-        $parameterClass = $parameter->getType()?->getName();
-
-        if ($parameterClass) {
-            $dependencies[] = $parameterClass;
-        }
-    }
-
-    return $dependencies;
-}
-

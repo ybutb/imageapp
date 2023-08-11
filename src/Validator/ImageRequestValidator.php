@@ -29,17 +29,17 @@ class ImageRequestValidator
 
         $width = $request->query->get('width');
 
-        if ($width && !is_numeric($width)) {
+        if (!is_numeric($width)) {
             throw new ApiException('Bad request', 400);
         }
 
         $height = $request->query->get('height');
 
-        if ($height && !is_numeric($height)) {
+        if (!is_numeric($height)) {
             throw new ApiException('Bad request', 400);
         }
 
-        if ($height && (int)$height > 5000 || $width && (int)$width > 5000) {
+        if ((int)$height > 5000 || (int)$width > 5000) {
             throw new ApiException('Bad request', 400);
         }
     }

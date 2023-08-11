@@ -31,8 +31,26 @@ class ImageController
         $image->width = (int)$this->request->query->get('width');
         $image->height = (int)$this->request->query->get('height');
 
-        $this->imageService->$imageAction($image);
+        $image = $this->imageService->$imageAction($image);
 
         return new RedirectResponse('/' . $image->modifiedName);
+    }
+
+    public function show(): Response
+    {
+        $data = ['imagePaths' => $this->imageService->getSampleImagesPaths()];
+
+        return $this->render('index', $data);
+    }
+
+    private function render(string $view, array $params): Response
+    {
+        ob_start();
+
+        extract($params);
+        include __DIR__ . '/../templates/' . $view . '.html';
+        $content = ob_get_clean();
+
+        return new Response($content);
     }
 }

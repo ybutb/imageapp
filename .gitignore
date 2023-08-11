@@ -2,3 +2,4 @@
 .git
 /vendor/
 public/images/modified/
+.phpunit.result.cache
