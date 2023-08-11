@@ -4,59 +4,61 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Exception\ImageModificationException;
+use App\Exception\ApiException;
 use App\Model\Image;
-use HttpException;
 use Imagick;
 use ImagickException;
-use InvalidArgumentException;
 
 class ImageService
 {
-    private const LOCATION_UNMODIFIED_IMAGES = 'public/images/';
-    private const LOCATION_MODIFIED_IMAGES = 'public/images/modified/';
+    private const LOCATION_UNMODIFIED_IMAGES = 'images/';
+    private const LOCATION_MODIFIED_IMAGES = 'images/modified/';
 
     /**
-     * @throws HttpException Image not found or wrong image arguments.
-     * @throws ImageModificationException Error during image cropping.
+     * @throws ApiException Error during image cropping or not found.
      */
     public function crop(Image $image): void
     {
-        if (!file_exists(self::LOCATION_UNMODIFIED_IMAGES . $image->initialName)) {
-            throw new HttpException('Image not found', 404);
+        if (!file_exists(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName)) {
+            throw new ApiException('Failed to open the image: ' . $image->originalName, 400);
         }
 
         if ($image->width === null || $image->height === null) {
-            throw new HttpException('Width or height for a crop operation is not defined.', 500);
+            throw new ApiException('Width or height for a crop operation is not defined.', 500);
+        }
+
+        $image->modifiedName = $this->generateModifiedName('crop', $image);
+
+        if ($this->isModified($image)) {
+            return;
         }
 
         try {
-            $imagick = new Imagick(self::LOCATION_UNMODIFIED_IMAGES . $image->initialName);
-            $width = $imagick->getImageWidth();
-            $height = $imagick->getImageHeight();
-        } catch (\ImagickException $e) {
-            throw new ImageModificationException('Failed to open the image: ' . $image->initialName);
+            $imagick = new Imagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
+            $originalWidth = $imagick->getImageWidth();
+            $originalHeight = $imagick->getImageHeight();
+        } catch (ImagickException $e) {
+            throw new ApiException('Error during the image width/height check: ' . $image->originalName, 500);
         }
 
-        if ($image->width > $width || $image->height > $height) {
-            throw new ImageModificationException('Crop size is invalid');
+        if ($image->width > $originalWidth || $image->height > $originalHeight) {
+            $imagick->clear();
+
+            throw new ApiException('Crop size is invalid', 500);
         }
-
-        $startWidth = ($width - $image->width) / 2;
-        $startHeight = ($height - $image->height) / 2;
-
-        $image->modifiedName = $this->generateImageName('crop', $image);
 
         try {
-            $imagick->cropImage($image->width, $image->height, $startWidth, $startHeight);
+            $imagick->cropImage($image->width, $image->height, 0, 0);
             $imagick->setImageFormat("webp");
+            $this->setWritable();
             $imagick->writeImage(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
         } catch (ImagickException $e) {
-            throw new ImageModificationException('Error during image cropping.');
+            $imagick->clear();
+
+            throw new ApiException('Error during the image cropping.', 500);
         }
 
         $imagick->clear();
-        $imagick->destroy();
     }
 
     public function resize(int $width, int $length): void
@@ -64,8 +66,24 @@ class ImageService
         // crop image
     }
 
-    private function generateImageName(string $action, Image $image): string
+    private function generateModifiedName(string $action, Image $image): string
     {
-        return sprintf('%s_%s_%s_', $action, $image->width, $image->height) . $image->initialName;
+        return sprintf('%s_%s_%s_', $action, $image->width, $image->height) . $image->originalName;
+    }
+
+    private function isModified(Image $image): bool
+    {
+        return file_exists(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
+    }
+
+    public function setWritable(): void
+    {
+        if (!file_exists(self::LOCATION_MODIFIED_IMAGES)) {
+            mkdir(self::LOCATION_MODIFIED_IMAGES, 0662);
+        }
+
+        if (!is_writable(self::LOCATION_MODIFIED_IMAGES)) {
+            chmod(self::LOCATION_MODIFIED_IMAGES, 0662);
+        }
     }
 }

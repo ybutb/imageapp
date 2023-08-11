@@ -16,6 +16,9 @@ services:
   app:
     build:
       context: .
+      args:
+        - HOST_UID=${HOST_UID:-1000}
+        - HOST_GID=${HOST_GID:-1000}
       dockerfile: Dockerfile
     volumes:
       - .:/var/www/html

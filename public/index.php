@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/../vendor/autoload.php';
 
+use App\Exception\ApiException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
@@ -23,10 +24,10 @@ try {
         !in_array($routeParamName, ['action', 'controller', 'method', '_route'], true),
     ARRAY_FILTER_USE_BOTH);
 
-    $controller = $routeParams['controller'];
+    $controllerClass = $routeParams['controller'];
     $action = $routeParams['action'];
 
-    $dependencies = getDependencies($controller);
+    $dependencies = getDependencyClasses($controllerClass);
     $dependencyInstances = [];
 
     foreach ($dependencies as $dependency) {
@@ -39,12 +40,11 @@ try {
         $dependencyInstances[] = new $dependency();
     }
 
-    $controllerInstance = new $controller(...$dependencyInstances);
-
+    $controllerInstance = new $controllerClass(...$dependencyInstances);
     $response = $controllerInstance->{$action}(...$methodParams);
 } catch (ResourceNotFoundException $exception) {
     $response = new Response('Not Found', 404);
-} catch (HttpException $exception) {
+} catch (ApiException $exception) {
     $response = new Response('An error occurred', $exception->getCode());
 } catch (Exception $exception) {
     $response = new Response('An error occurred', 500);
@@ -52,7 +52,7 @@ try {
 
 $response->send();
 
-function getDependencies(string $class): array
+function getDependencyClasses(string $class): array
 {
     $reflectionClass = new ReflectionClass($class);
 

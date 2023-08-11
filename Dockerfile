@@ -1,5 +1,8 @@
 FROM php:8-fpm
 
+ARG HOST_UID
+ARG HOST_GID
+
 # Install required system dependencies and Composer
 RUN apt-get update && apt-get install -y git zip unzip && \
     php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && \
@@ -21,7 +24,11 @@ RUN echo "xdebug.mode=debug" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.
     && echo "xdebug.start_with_request=yes" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
     && echo "xdebug.xdebug.idekey=PHPSTORM" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini;
 
-RUN composer install
+# Add a user able to write to modified images directory
+RUN groupadd -g "${HOST_GID}" group \
+  && useradd --create-home --no-log-init -u "${HOST_UID}" -g "${HOST_GID}" user
+
+USER user
 
 # Expose port 9000 (default PHP-FPM port)
 EXPOSE 9000

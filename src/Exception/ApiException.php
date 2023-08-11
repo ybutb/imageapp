@@ -6,7 +6,7 @@ namespace App\Exception;
 
 use Exception;
 
-class ImageModificationException extends Exception
+class ApiException extends Exception
 {
 
 }
