@@ -9,7 +9,7 @@ class ImageTest extends TestCase
 {
     public function testPathInfo()
     {
-        $image = new Image('test.jpg');
+        $image = new Image('test.jpg', 'resize');
 
         $this->assertEquals($image->getExtension(), 'jpg');
     }

@@ -7,6 +7,7 @@ namespace App\Tests\Unit;
 use App\Exception\ApiException;
 use App\Model\Image;
 use App\Service\ImageService;
+use App\Service\ImagickFacade;
 use Imagick;
 use ImagickException;
 use PHPUnit\Framework\TestCase;
@@ -16,221 +17,134 @@ class ImageServiceTest extends TestCase
     private const INITIAL_WIDTH = 100;
     private const INITIAL_HEIGHT = 100;
 
-    public function testCropSuccess()
+    /**
+     * @dataProvider actionsProvider
+     */
+    public function testModifySuccess(string $action)
     {
-        $service = $this->getImageServiceForCropSuccess();
+        $service = $this->getImageServiceFSMocked();
+        $imageName = 'test.jpg';
 
-        $image = new Image('test.jpg');
+        $image = new Image($imageName, $action);
         $image->width = self::INITIAL_WIDTH - 10;
         $image->height = self::INITIAL_HEIGHT - 10;
 
-        $expectedModifiedName = 'crop_' . $image->width . '_' . $image->height . '_test.jpg';
+        $expectedModifiedName = $action . '_' . $image->width . '_' . $image->height . '_' . $imageName;
 
-        $service->crop($image);
+        $service->modify($image);
 
         $this->assertEquals($image->modifiedName, $expectedModifiedName);
     }
 
+    public static function actionsProvider(): array
+    {
+        return [
+            ['resize'],
+            ['crop'],
+        ];
+    }
+
     public function testCropErrorNotExists()
     {
-        $service = $this->createPartialMock(ImageService::class, ['getImagick','isOriginalImageExists']);
         $imageName = 'test.jpg';
+        $action = 'crop';
         $widthToChange = self::INITIAL_WIDTH - 10;
         $heightToChange = self::INITIAL_HEIGHT - 10;
 
+        $service = $this->createPartialMock(ImageService::class, ['isOriginalImageExists']);
         $service->expects($this->once())
             ->method('isOriginalImageExists')
             ->willThrowException(new ApiException(
-                'Failed to find the image: ' . 'crop_' . $widthToChange . '_' . $heightToChange . '_' . $imageName
+                'Failed to find the image: ' . $action . '_' . $widthToChange . '_' . $heightToChange . '_' . $imageName, 404
             ));
 
-        $service->expects($this->never())
-            ->method('getImagick');
-
-        $image = new Image($imageName);
+        $image = new Image($imageName, $action);
         $image->width = $widthToChange;
         $image->height = $heightToChange;
 
         $this->expectException(ApiException::class);
+        $this->expectExceptionCode(404);
 
-        $service->crop($image);
+        $service->modify($image);
     }
 
     public function testCropErrorMissingParams()
     {
-        $service = $this->createPartialMock(ImageService::class, ['getImagick', 'isOriginalImageExists']);
-        $imagickMock = $this->createMock(Imagick::class);
-
-        $service->expects($this->any())
-            ->method('isOriginalImageExists')
-            ->with()
-            ->willReturn(true);
-
-        $service->expects($this->any())
-            ->method('getImagick')
-            ->with()
-            ->willReturn($imagickMock);
-
-        $image = new Image('test.jpg');
+        $service = $this->getImageServiceFSMocked();
+        $action = 'crop';
+        $image = new Image('test.jpg', $action);
 
         $this->expectException(ApiException::class);
         $this->expectExceptionMessage('Width or height for a crop operation is not defined.');
         $this->expectExceptionCode(500);
 
-        $service->crop($image);
-    }
-
-    /**
-     * @dataProvider imagickErrorsHandlingProvider
-     */
-    public function testCropImagickErrorsHandling(string $imagickMethodName)
-    {
-        $imagickMock = $this->createPartialMock(Imagick::class, [$imagickMethodName]);
-
-        $imagickMock->expects($this->any())
-            ->method($imagickMethodName)
-            ->with()
-            ->willThrowException(new ImagickException('test exception'));
-
-        $service = $this->createPartialMock(ImageService::class, ['getImagick', 'isOriginalImageExists']);
-
-        $service->expects($this->once())
-            ->method('isOriginalImageExists')
-            ->with()
-            ->willReturn(true);
-
-        $service->expects($this->once())
-            ->method('getImagick')
-            ->with()
-            ->willReturn($imagickMock);
-
-        $image = new Image('test.jpg');
-        $image->width = self::INITIAL_WIDTH + 10;
-        $image->height = self::INITIAL_HEIGHT + 10;
-
-        $this->expectException(ApiException::class);
-        $this->expectExceptionCode(500);
-
-        $service->crop($image);
-    }
-
-    /**
-     * @dataProvider successResizeDataProvider
-     */
-    public function testResizeSuccess(int $width, int $height) {
-
-        $service = $this->getImageServiceForResizeSuccess();
-
-        $image = new Image('test.jpg');
-        $image->width = $width;
-        $image->height = $height;
-
-        $service->resize($image);
-
-        $expectedModifiedName = 'resize_' . $image->width . '_' . $image->height . '_test.jpg';;
-        $this->assertEquals($image->modifiedName, $expectedModifiedName);
+        $service->modify($image);
     }
 
     public function testResizeErrorNotExists() {
-        $image = new Image('test.jpg');
-        $image->width = self::INITIAL_WIDTH - 10;
-        $image->height = self::INITIAL_HEIGHT - 10;
+        $imageName = 'test.jpg';
+        $action = 'resize';
+        $widthToChange = self::INITIAL_WIDTH - 20;
+        $heightToChange = self::INITIAL_HEIGHT + 20;
 
-        $service = $this->createPartialMock(ImageService::class, ['getImagick', 'isOriginalImageExists']);
-
+        $service = $this->createPartialMock(ImageService::class, ['isOriginalImageExists']);
         $service->expects($this->once())
             ->method('isOriginalImageExists')
-            ->willThrowException(new ApiException('Failed to find the image: ' . $image->originalName, 404));
+            ->willThrowException(new ApiException(
+                'Failed to find the image: ' . $action . '_' . $widthToChange . '_' . $heightToChange . '_' . $imageName, 404
+            ));
 
-        $service->expects($this->never())
-            ->method('getImagick');
+        $image = new Image($imageName, $action);
+        $image->width = $widthToChange;
+        $image->height = $heightToChange;
 
         $this->expectException(ApiException::class);
-        $this->expectExceptionMessage('Failed to find the image: ' . $image->originalName);
         $this->expectExceptionCode(404);
 
-        $service->resize($image);
+        $service->modify($image);
     }
 
-    public static function successResizeDataProvider(): array
+    public function testAlreadyModifiedWithSameParametersExists()
     {
-        return [
-            'resizeToBigger' => [
-                'width' => self::INITIAL_WIDTH + 300,
-                'height' => self::INITIAL_HEIGHT + 300
-            ],
-            'resizeSame' => [
-                'width' => self::INITIAL_WIDTH,
-                'height' => self::INITIAL_HEIGHT
-            ],
-            'resizeLess' => [
-                'width' => self::INITIAL_WIDTH + 300,
-                'height' => self::INITIAL_HEIGHT + 300
-            ],
-        ];
-    }
+        $action = 'resize';
+        $imageName = 'test.jpg';
+        $widthToChange = self::INITIAL_WIDTH - 20;
+        $heightToChange = self::INITIAL_HEIGHT + 20;
 
-    public static function imagickErrorsHandlingProvider(): array
-    {
-        return [
-            [
-                'writeImage'
-            ],
-            [
-                'cropImage'
-            ],
-            [
-                'setImageFormat'
-            ],
-        ];
+        $imagickFacadeMock = $this->createMock(ImagickFacade::class);
+
+        $imagickFacadeMock->expects($this->never())
+            ->method($action);
+
+        $service = $this->getMockBuilder(ImageService::class)
+            ->setConstructorArgs([$imagickFacadeMock])
+            ->onlyMethods(['isOriginalImageExists', 'isModified'])
+            ->getMock();
+
+        $service->expects($this->once())
+            ->method('isModified')
+            ->willReturn(true);
+
+        $image = new Image($imageName, $action);
+        $image->width = $widthToChange;
+        $image->height = $heightToChange;
+        $image->modifiedName = $action . '_' . $widthToChange . '_' . $heightToChange . '_' . $imageName;
+
+        $service->modify($image);
+
+        $this->assertEquals($image->modifiedName, $action . '_' . $widthToChange . '_' . $heightToChange . '_' . $imageName);
     }
 
     /**
-     * Mocking manipulations with the file system.
+     * Mocking manipulations with the file system only.
      */
-    protected function getImageServiceForCropSuccess()
+    protected function getImageServiceFSMocked()
     {
-        $imagickMock = $this->createMock(Imagick::class);
+        $imagickFacadeMock = $this->createMock(ImagickFacade::class);
 
-        $imagickMock->expects($this->once())
-            ->method('writeImage');
-
-        $service = $this->createPartialMock(ImageService::class, ['getImagick', 'isOriginalImageExists']);
-
-        $service->expects($this->once())
-            ->method('getImagick')
-            ->with()
-            ->willReturn($imagickMock);
-
-        $service->expects($this->once())
-            ->method('isOriginalImageExists')
-            ->with()
-            ->willReturn(true);
-
-        return $service;
-    }
-
-    /**
-     * Mocking manipulations with the file system.
-     */
-    protected function getImageServiceForResizeSuccess()
-    {
-        $imagickMock = $this->createMock(Imagick::class);
-        $imagickMock->expects($this->atLeastOnce())
-            ->method('writeImage');
-
-        $service = $this->createPartialMock(ImageService::class, ['getImagick', 'isOriginalImageExists']);
-
-        $service->expects($this->once())
-            ->method('getImagick')
-            ->with()
-            ->willReturn($imagickMock);
-
-        $service->expects($this->once())
-            ->method('isOriginalImageExists')
-            ->with()
-            ->willReturn(true);
-
-        return $service;
+        return $this->getMockBuilder(ImageService::class)
+            ->setConstructorArgs([$imagickFacadeMock])
+            ->onlyMethods(['isOriginalImageExists'])
+            ->getMock();
     }
 }

@@ -6,7 +6,6 @@ namespace App\Service;
 
 use App\Exception\ApiException;
 use App\Model\Image;
-use Imagick;
 use ImagickException;
 
 class ImageService
@@ -14,70 +13,41 @@ class ImageService
     private const LOCATION_UNMODIFIED_IMAGES = 'images/';
     private const LOCATION_MODIFIED_IMAGES = 'images/modified/';
 
+    public function __construct(private readonly ImagickFacade $imagickFacade)
+    {
+    }
+
     /**
-     * @throws ApiException Error during image cropping or not found.
+     * @throws ApiException Error during image cropping or not found / modification params were not provided.
      */
-    public function crop(Image $image): Image
+    public function modify(Image $image): void
     {
         $this->isOriginalImageExists($image);
 
-        if ($image->width === null || $image->height === null) {
+        if (!$image->width || !$image->height) {
             throw new ApiException('Width or height for a crop operation is not defined.', 500);
         }
 
-        $image->modifiedName = $this->generateModifiedName('crop', $image);
+        $image->modifiedName = $this->generateModifiedName($image->modificationType, $image);
 
         if ($this->isModified($image)) {
-            return $image;
+            return;
         }
+
+        $modificationAction = $image->modificationType;
 
         try {
-            $imagick = $this->getImagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
-            $imagick->cropImage($image->width, $image->height, 0, 0);
-            $imagick->setImageFormat($image->getExtension());
-            $imagick->writeImage(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
+            $this->imagickFacade->$modificationAction(
+                self::LOCATION_UNMODIFIED_IMAGES . $image->originalName,
+                self::LOCATION_MODIFIED_IMAGES . $image->modifiedName,
+                $image
+            );
         } catch (ImagickException $e) {
-            throw new ApiException('Error during the image cropping ' . $image->originalName, 500);
+            throw new ApiException('Error during the image modification ' . $image->originalName, 500);
         }
-
-        $imagick->clear();
-
-        return $image;
     }
 
-    protected function getImagick(string $file): Imagick
-    {
-        return new Imagick($file);
-    }
-
-    public function resize(Image $image): Image
-    {
-        $this->isOriginalImageExists($image);
-
-        if ($image->width === null && $image->height === null) {
-            throw new ApiException('Width or height for a crop operation is not defined.', 500);
-        }
-
-        $image->modifiedName = $this->generateModifiedName('resize', $image);
-
-        if ($this->isModified($image)) {
-            return $image;
-        }
-
-        try {
-            $imagick = $this->getImagick(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName);
-            $imagick->resizeImage($image->width, $image->height, Imagick::FILTER_UNDEFINED, 1);
-            $imagick->writeImage(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
-        } catch (ImagickException $e) {
-            throw new ApiException('Error during the image resize: ' . $image->originalName, 500);
-        }
-
-        $imagick->clear();
-
-        return $image;
-    }
-
-    protected function isOriginalImageExists(Image $image)
+    protected function isOriginalImageExists(Image $image): void
     {
         if (!file_exists(self::LOCATION_UNMODIFIED_IMAGES . $image->originalName)) {
             throw new ApiException('Failed to find the image: ' . $image->originalName, 404);
@@ -89,7 +59,7 @@ class ImageService
         return sprintf('%s_%s_%s_', $action, $image->width, $image->height) . $image->originalName;
     }
 
-    private function isModified(Image $image): bool
+    protected function isModified(Image $image): bool
     {
         return file_exists(self::LOCATION_MODIFIED_IMAGES . $image->modifiedName);
     }

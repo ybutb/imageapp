@@ -9,7 +9,7 @@ class Image
     public ?int $width = null;
     public ?int $height = null;
 
-    public function __construct(public string $originalName)
+    public function __construct(public string $originalName, public string $modificationType)
     {
     }
 

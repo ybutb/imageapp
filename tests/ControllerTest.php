@@ -6,6 +6,7 @@ use App\Controller\ImageController;
 use App\Exception\ApiException;
 use App\Model\Image;
 use App\Service\ImageService;
+use App\Service\ImagickFacade;
 use App\Tests\BaseRequestTestCase;
 
 class ControllerTest extends BaseRequestTestCase
@@ -19,17 +20,18 @@ class ControllerTest extends BaseRequestTestCase
         $width = 100;
         $height = 200;
 
-        $image = new Image($imageName);
+        $image = new Image($imageName, $action);
         $image->width = $width;
         $image->height = $height;
-        $image->modifiedName = $action . '_100_200_' . $imageName;
-
-        $imageServiceMock = $this->createPartialMock(ImageService::class, [$action]);
-        $imageServiceMock->expects($this->once())
-            ->method($action)
-            ->willReturn($image);
+        $image->modifiedName = $action . '_' . $width . '_' . $height . '_' . $imageName;
 
         $request = $this->createRequest(['width' => $width, 'height' => $height], '/' . $imageName . '/' . $action);
+
+        $imagickFacadeMock = $this->createMock(ImagickFacade::class);
+        $imageServiceMock = $this->getMockBuilder(ImageService::class)
+            ->setConstructorArgs([$imagickFacadeMock])
+            ->onlyMethods(['isOriginalImageExists'])
+            ->getMock();
 
         $controller = new ImageController($imageServiceMock, $request);
         $response = $controller->index($imageName, $action);
@@ -113,7 +115,7 @@ class ControllerTest extends BaseRequestTestCase
         $path = '/show';
         $request = $this->createRequest([], $path);
 
-        $controller = new ImageController(new ImageService(), $request);
+        $controller = new ImageController(new ImageService($this->createMock(ImagickFacade::class)), $request);
 
         $response = $controller->show();
 

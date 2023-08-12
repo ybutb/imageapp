@@ -27,11 +27,11 @@ class ImageController
     {
         ImageRequestValidator::validate($this->request);
 
-        $image = new Image($imageName);
+        $image = new Image($imageName, $imageAction);
         $image->width = (int)$this->request->query->get('width');
         $image->height = (int)$this->request->query->get('height');
 
-        $image = $this->imageService->$imageAction($image);
+        $this->imageService->modify($image);
 
         return new RedirectResponse('/' . $image->modifiedName);
     }

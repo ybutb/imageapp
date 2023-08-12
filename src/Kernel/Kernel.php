@@ -43,7 +43,18 @@ final class Kernel
         $controllerClass = $routeParams['controller'];
         $action = $routeParams['action'];
 
-        $dependencies = $this->getDependencyClasses($controllerClass);
+        $controllerInstance = $this->getInstance($controllerClass);
+
+        if (!method_exists($controllerInstance, $action)) {
+            throw new ApiException('Wrong route configuration', 500);
+        }
+
+        return $controllerInstance->{$action}(...$methodParams);
+    }
+
+    private function getInstance(string $class)
+    {
+        $dependencies = $this->getDependencyClasses($class);
         $dependencyInstances = [];
 
         foreach ($dependencies as $dependency) {
@@ -53,16 +64,14 @@ final class Kernel
                 continue;
             }
 
-            $dependencyInstances[] = new $dependency();
+            if (!empty($this->getDependencyClasses($dependency))) {
+                $dependencyInstances[] = $this->getInstance($dependency);
+            } else {
+                $dependencyInstances[] = new $dependency();
+            }
         }
 
-        $controllerInstance = new $controllerClass(...$dependencyInstances);
-
-        if (!method_exists($controllerInstance, $action)) {
-            throw new ApiException('Wrong route configuration', 500);
-        }
-
-        return $controllerInstance->{$action}(...$methodParams);
+        return new $class(...$dependencyInstances);
     }
 
     private function getDependencyClasses(string $class): array
@@ -78,9 +87,15 @@ final class Kernel
         $parameters = $constructor->getParameters();
 
         $dependencies = [];
-        // Loop through the parameters to see their types
+
         foreach ($parameters as $parameter) {
-            $parameterClass = $parameter->getType()?->getName();
+            $paramType = $parameter->getType();
+
+            if ($paramType->allowsNull()) {
+                continue;
+            }
+
+            $parameterClass = $paramType->getName();
 
             if ($parameterClass) {
                 $dependencies[] = $parameterClass;
