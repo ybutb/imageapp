@@ -12,9 +12,4 @@ class Image
     public function __construct(public string $originalName, public string $modificationType)
     {
     }
-
-    public function getExtension(): string
-    {
-        return pathinfo($this->originalName, PATHINFO_EXTENSION);
-    }
 }
