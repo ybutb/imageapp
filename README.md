@@ -4,10 +4,11 @@ docker-compose up -d
 docker-compose exec app composer install
 ````
 
-You could address the project by http://imageapp.local, just update your local hosts file with imageapp.local.
+You could address the project by http://imageapp.local, just update your local hosts file with a map 127.0.0.1 imageapp.local.
 
 2. To run the tests:
 ````
+docker-compose up -d
 docker-compose exec app ./vendor/bin/phpunit -c phpunit.xml
 ````
 
