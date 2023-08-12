@@ -1,5 +1,6 @@
 .idea
 .git
 /vendor/
-public/images/modified/
+public/images/modified/*
+!public/images/modified/.gitkeep
 .phpunit.result.cache
